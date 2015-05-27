@@ -25,11 +25,72 @@ class RestGenerator implements IGenerator {
 		fsa.generateFile('package.json', getPackageJson(resource.normalizedURI.lastSegment.replace('.rest', '')))
 		val ressources = resource.allContents.filter(typeof(Ressource)).toList
 		val entities = resource.allContents.filter(typeof(Entity)).toList
+		fsa.generateFile('swagger.json', getSwagger(ressources, entities))
 		fsa.generateFile('server.js', getServer(ressources))
 		for (Ressource r : ressources)
 			fsa.generateFile('ressources/' + r.name + '.js', getRessource(r))
 		for (Entity e : entities)
 			fsa.generateFile('validation/' + e.name + '.js', getValidation(e))
+	}
+
+	def getSwagger(List<Ressource> ressources, List<Entity> entities) {
+		'''
+			{
+				"swagger":"2.0",
+				"basePath":"",
+				"paths":{
+					«FOR r : ressources»
+						"«r.path»": {
+							«FOR c : r.commands»
+								"«getMethod(c)»": {
+									"tags":["«r.name»"],
+									«IF c==Command.CREATE || c==Command.UPDATE»
+									"consumes": ["application/json"],
+									"produces": ["application/json"],
+									«ELSEIF c==Command.READ»
+									"produces": ["application/json"],
+									«ENDIF»
+									"responses":{
+										"«getStatusCode(c)»":{
+											"description": "",
+											"schema": {
+												
+											}
+										}
+									}
+								},
+							«ENDFOR»
+						},
+					«ENDFOR»
+				}
+			}
+		'''
+	}
+	
+	def getStatusCode(Command command) {
+		switch (command) {
+			case CREATE:
+				return "201"
+			case READ:
+				return "200"
+			case UPDATE:
+				return "200"
+			case DELETE:
+				return "200"
+		}
+	}
+
+	def getMethod(Command command) {
+		switch (command) {
+			case CREATE:
+				return "post"
+			case READ:
+				return "get"
+			case UPDATE:
+				return "put"
+			case DELETE:
+				return "delete"
+		}
 	}
 
 	def getValidation(Entity entity) {
@@ -214,7 +275,7 @@ class RestGenerator implements IGenerator {
 				"body-parser": "~1.8.1",
 				"joi": "~6.4.2",
 				"express": "~4.9.0"
-			  }
+				 }
 			}
 		'''
 	}
