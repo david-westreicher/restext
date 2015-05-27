@@ -1,0 +1,35 @@
+grammar at.westreicher.rest.Rest with org.eclipse.xtext.common.Terminals
+
+generate rest "http://www.westreicher.at/rest/Rest"
+
+Model:
+	ressources+=Object*;
+
+Object:
+	(Ressource | Entity) NEWLINE;
+
+Ressource:
+	'ressource ' name=ID NEWLINETAB
+	'entity: ' entity=[Entity] NEWLINETAB
+	'path: ' path=STRING NEWLINETAB
+	'commands: ' commands+=Command (',' commands+=Command)* NEWLINETAB
+	'description: ' description=STRING;
+
+Entity:
+	'entity ' name=ID NEWLINETAB
+	props+=Property*;
+
+Property:
+	name=ID ':' (type=Type | ('entity:' entity=[Entity])) (NEWLINETAB?);
+
+enum Type:
+	STRING='string' | BOOLEAN='boolean' | INTEGER='integer';
+
+enum Command:
+	CREATE='create' | READ='read' | UPDATE='update' | DELETE='delete';
+
+terminal NEWLINE:
+	('\r' | '\n')*;
+
+terminal NEWLINETAB:
+	('\r' | '\n')+ '\t'+;
