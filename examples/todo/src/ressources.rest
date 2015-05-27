@@ -1,0 +1,5 @@
+ressource todos
+	entity: todo
+	path: "/todos"
+	commands: delete,create,read,update
+	description: "This is a ressource to save todo items"

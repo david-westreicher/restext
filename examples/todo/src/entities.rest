@@ -1,0 +1,4 @@
+entity todo
+	title: string
+	completed: boolean
+	order: integer
