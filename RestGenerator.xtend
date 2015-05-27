@@ -73,10 +73,10 @@ class RestGenerator implements IGenerator {
 			var validate = require('../validation/«r.entity.name»');
 			
 			function cors(res){
-			    res.setHeader('Access-Control-Allow-Origin', 'http://localhost:8000');
-			    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, PATCH, DELETE, CLICK');
-			    res.setHeader('Access-Control-Allow-Headers', 'X-HTTP-Method-Override,X-Requested-With,content-type');
-			    res.setHeader('Access-Control-Allow-Credentials', true);
+				res.setHeader('Access-Control-Allow-Origin', 'http://localhost:8000');
+				res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, PATCH, DELETE, CLICK');
+				res.setHeader('Access-Control-Allow-Headers', 'X-HTTP-Method-Override,X-Requested-With,content-type');
+				res.setHeader('Access-Control-Allow-Credentials', true);
 			}
 			
 			var router = express.Router();
@@ -84,58 +84,58 @@ class RestGenerator implements IGenerator {
 			var name = '«r.entity.name»';
 			
 			function getIndex(id){
-			    var index = -1;
-			    for(var i=0;i<dbarr.length;i++){
-			        if(dbarr[i].id == id){
-			            index = i;
-			            break;
-			        }
-			    }
-			    return index;
+				var index = -1;
+				for(var i=0;i<dbarr.length;i++){
+					if(dbarr[i].id == id){
+						index = i;
+						break;
+					}
+				}
+				return index;
 			}
 			«IF r.commands.contains(Command.READ)»
 				router.get('/', function(req, res, next) {
-				    console.log('list all '+name+'s');
-				    cors(res);
-				    res.json(dbarr);
+					console.log('list all '+name+'s');
+					cors(res);
+					res.json(dbarr);
 				});
 				router.get('/:id', function(req, res, next) {
 					var id = req.param('id');
-					   console.log('getting '+name,id);
-					   var index = getIndex(id);
-					   cors(res);
-					   if(index>=0){
-					   	console.log('success');
-					   	   res.json(dbarr[index]);
-					   }else{
-					   	var errText = 'Couldn\'t find '+name+' with id '+id;
-					   	console.log(errText);
-					   	res.status(400).send({ error: errText});
-					   }
+					console.log('getting '+name,id);
+					var index = getIndex(id);
+					cors(res);
+					if(index>=0){
+						console.log('success');
+						res.json(dbarr[index]);
+					}else{
+						var errText = 'Couldn\'t find '+name+' with id '+id;
+						console.log(errText);
+						res.status(400).send({ error: errText});
+					}
 				});
 			«ENDIF»
 			«IF r.commands.contains(Command.CREATE)»
 				router.post('/', function(req, res, next) {
-				    var entity = req.body;
-				    entity.id = Date.now();
-				    console.log('create '+name,entity);
-				    cors(res);
-				    if(validate(entity)){
-				     dbarr.push(entity);
-				     console.log('success');
-				     res.status(201).json(entity);
-				}else{
-				    console.log('not valid');
-				    res.status(400).json({ error: 'not a valid '+name,entity:entity});
-				}
+					var entity = req.body;
+					entity.id = Date.now();
+					console.log('create '+name,entity);
+					cors(res);
+					if(validate(entity)){
+						dbarr.push(entity);
+						console.log('success');
+						res.status(201).json(entity);
+					}else{
+						console.log('not valid');
+						res.status(400).json({ error: 'not a valid '+name,entity:entity});
+					}
 				});
 			«ENDIF»
 			«IF r.commands.contains(Command.UPDATE)»
 				router.put('/:id', function(req, res, next) {
 					var id = req.param('id');
-					   var entity = req.body;
-					   console.log('update '+name,id,'with',entity);
-					   var index = getIndex(entity.id);
+					var entity = req.body;
+					console.log('update '+name,id,'with',entity);
+					var index = getIndex(entity.id);
 					cors(res);
 					var errText = null;
 					if(!validate(entity)){
@@ -144,41 +144,41 @@ class RestGenerator implements IGenerator {
 						errText = 'id of request ('+id+') didn\'t match payloadid ('+entity.id+')';
 					}else if(index<0){
 						errText = 'Couldn\'t find '+name+' with id '+id;
-						  }
-						  if(errText==null){
-						   dbarr[index] = entity;
-						   console.log('success');
-						   res.json(entity);
-						  }else{
-						  	console.log(errText);
-						  	res.status(400).send({ error: errText});
-						  }
+					}
+					if(errText==null){
+						dbarr[index] = entity;
+						console.log('success');
+						res.json(entity);
+					}else{
+						console.log(errText);
+						res.status(400).send({ error: errText});
+					}
 				});
 			«ENDIF»
 			«IF r.commands.contains(Command.DELETE)»
 				router.delete('/:id', function(req, res, next) {
 					var id = req.param('id');
-					   console.log('delete '+name,id);
-					   var index = getIndex(id);
-					   cors(res);
-					   if(index>=0){
-					       dbarr.splice(index,1);
-					   	console.log('success');
-					   	   res.json(null);
-					   }else{
-					   	var errText = 'Couldn\'t find '+name+' with id '+id;
-					   	console.log(errText);
-					   	res.status(400).send({ error: errText});
-					   }
+					console.log('delete '+name,id);
+					var index = getIndex(id);
+					cors(res);
+					if(index>=0){
+						dbarr.splice(index,1);
+						console.log('success');
+						res.json(null);
+					}else{
+						var errText = 'Couldn\'t find '+name+' with id '+id;
+						console.log(errText);
+						res.status(400).send({ error: errText});
+					}
 				});
 			«ENDIF»
 			router.options('/:id', function(req, res, next) {
-			    cors(res);
-			    res.json(null);
+				cors(res);
+				res.json(null);
 			});
 			router.options('/', function(req, res, next) {
-			    cors(res);
-			    res.json(null);
+				cors(res);
+				res.json(null);
 			});
 			
 			module.exports = router;
@@ -211,9 +211,9 @@ class RestGenerator implements IGenerator {
 			  "version": "0.0.0",
 			  "private": true,
 			  "dependencies": {
-			    "body-parser": "~1.8.1",
-			    "joi": "~6.4.2",
-			    "express": "~4.9.0"
+				"body-parser": "~1.8.1",
+				"joi": "~6.4.2",
+				"express": "~4.9.0"
 			  }
 			}
 		'''

@@ -20,7 +20,7 @@ Entity:
 	props+=Property*;
 
 Property:
-	name=ID ':' (type=Type | ('entity:' entity=[Entity])) (NEWLINETAB?);
+	name=ID ':' (type=Type | ('entity: ' entity=[Entity])) (NEWLINETAB?);
 
 enum Type:
 	STRING='string' | BOOLEAN='boolean' | INTEGER='integer';
