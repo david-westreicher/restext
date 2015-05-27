@@ -3,3 +3,7 @@ ressource todos
 	path: "/todos"
 	commands: delete,create,read,update
 	description: "This is a ressource to save todo items"
+entity todo
+	title: string
+	completed: boolean
+	order: integer
