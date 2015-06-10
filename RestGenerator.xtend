@@ -37,28 +37,85 @@ class RestGenerator implements IGenerator {
 		'''
 			{
 				"swagger":"2.0",
-				"basePath":"",
+				"basePath":"/",
+				"schemes": ["http"],
 				"paths":{
 					«FOR r : ressources»
 						"«r.path»": {
 							«FOR c : r.commands»
+								«IF c==Command.CREATE || c==Command.READ»
+									"«getMethod(c)»": {
+										"tags":["«r.name»"],
+										«IF c==Command.CREATE»
+										"consumes": ["application/json"],
+										"parameters":[{
+											"in": "body",
+											"name": "body",
+											"schema": {
+												"$ref": "#/definitions/«r.entity.name»"
+											}
+										}],
+										«ENDIF»
+										"produces": ["application/json"],
+										"responses":{
+											"«getStatusCode(c)»":{
+												"description": "valid operation",
+												"schema": {
+													«IF c==Command.CREATE»
+													"$ref": "#/definitions/«r.entity.name»"
+													«ELSE»
+													"type": "array",
+													"items": {
+														"$ref": "#/definitions/«r.entity.name»"
+													}
+													«ENDIF»
+												}
+											},
+											"400":{
+												"description": "invalid operation"
+											}
+										}
+									},
+								«ENDIF»
+							«ENDFOR»
+						},
+						"«r.path»/{id}": {
+							«FOR c : r.commands»
+								«IF c==Command.UPDATE || c==Command.READ || c==Command.DELETE»
 								"«getMethod(c)»": {
 									"tags":["«r.name»"],
-									«IF c==Command.CREATE || c==Command.UPDATE»
+									«IF c==Command.UPDATE»
 									"consumes": ["application/json"],
 									"produces": ["application/json"],
 									«ELSEIF c==Command.READ»
 									"produces": ["application/json"],
 									«ENDIF»
+									"parameters":[
+										{
+											"name": "id",
+											"in": "path"
+										}«IF c==Command.UPDATE»,
+										{
+											"in": "body",
+											"name": "body",
+											"schema": {
+												"$ref": "#/definitions/«r.entity.name»"
+											}
+										}«ENDIF»
+									],
 									"responses":{
 										"«getStatusCode(c)»":{
-											"description": "",
+											"description": "valid operation",
 											"schema": {
-												
+												"$ref": "#/definitions/«r.entity.name»"
 											}
+										},
+										"400":{
+											"description": "invalid operation"
 										}
 									}
 								},
+								«ENDIF»
 							«ENDFOR»
 						},
 					«ENDFOR»
