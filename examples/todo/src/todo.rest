@@ -1,7 +1,7 @@
 ressource todos
 	entity: todo
 	path: "/todos"
-	commands: delete,create,read,update
+	commands: delete(all),create(all),read(all),update(all)
 	description: "This is a ressource to save todo items"
 
 entity todo
@@ -9,3 +9,5 @@ entity todo
 	completed: boolean
 	order: integer
 
+role user
+role admin isa user

@@ -1,11 +1,12 @@
-grammar at.westreicher.rest.Rest with org.eclipse.xtext.common.Terminals 
+grammar at.westreicher.rest.Rest with org.eclipse.xtext.common.Terminals
 
 generate rest "http://www.westreicher.at/rest/Rest"
+
 Model:
 	ressources+=Object*;
 
 Object:
-	(Ressource | Entity) NEWLINE;
+	(Ressource | Entity | User) NEWLINE;
 
 Ressource:
 	'ressource ' name=ID NEWLINETAB
@@ -24,7 +25,13 @@ Property:
 enum Type:
 	STRING='string' | BOOLEAN='boolean' | INTEGER='integer';
 
-enum Command:
+User:
+	'role' name=ID ('isa' parent=[User])?;
+
+Command:
+	op=Operation '(' ((user=[User]) | 'all') ')';
+
+enum Operation:
 	CREATE='create' | READ='read' | UPDATE='update' | DELETE='delete';
 
 terminal NEWLINE:

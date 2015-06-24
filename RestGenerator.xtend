@@ -3,16 +3,18 @@
  */
 package at.westreicher.rest.generator
 
-import at.westreicher.rest.rest.Command
+import at.westreicher.rest.rest.Entity
+import at.westreicher.rest.rest.Operation
 import at.westreicher.rest.rest.Ressource
+import at.westreicher.rest.rest.Type
 import java.util.List
 import org.eclipse.emf.ecore.resource.Resource
 import org.eclipse.xtext.generator.IFileSystemAccess
 import org.eclipse.xtext.generator.IGenerator
 
 import static extension org.eclipse.xtext.EcoreUtil2.*
-import at.westreicher.rest.rest.Entity
-import at.westreicher.rest.rest.Type
+import at.westreicher.rest.rest.User
+import java.util.ArrayList
 
 /**
  * Generates code from your model files on save.
@@ -25,10 +27,11 @@ class RestGenerator implements IGenerator {
 		fsa.generateFile('package.json', getPackageJson(resource.normalizedURI.lastSegment.replace('.rest', '')))
 		val ressources = resource.allContents.filter(typeof(Ressource)).toList
 		val entities = resource.allContents.filter(typeof(Entity)).toList
+		val users = resource.allContents.filter(typeof(User)).toList
 		fsa.generateFile('swagger.json', getSwagger(ressources, entities))
 		fsa.generateFile('server.js', getServer(ressources))
 		for (Ressource r : ressources)
-			fsa.generateFile('ressources/' + r.name + '.js', getRessource(r))
+			fsa.generateFile('ressources/' + r.name + '.js', getRessource(r, users))
 		for (Entity e : entities)
 			fsa.generateFile('validation/' + e.name + '.js', getValidation(e))
 	}
@@ -43,31 +46,31 @@ class RestGenerator implements IGenerator {
 					«FOR r : ressources»
 						"«r.path»": {
 							«FOR c : r.commands»
-								«IF c==Command.CREATE || c==Command.READ»
-									"«getMethod(c)»": {
+								«IF c.op==Operation.CREATE || c.op==Operation.READ»
+									"«getMethod(c.op)»": {
 										"tags":["«r.name»"],
-										«IF c==Command.CREATE»
-										"consumes": ["application/json"],
-										"parameters":[{
-											"in": "body",
-											"name": "body",
-											"schema": {
-												"$ref": "#/definitions/«r.entity.name»"
-											}
-										}],
+										«IF c.op==Operation.CREATE»
+											"consumes": ["application/json"],
+											"parameters":[{
+												"in": "body",
+												"name": "body",
+												"schema": {
+													"$ref": "#/definitions/«r.entity.name»"
+												}
+											}],
 										«ENDIF»
 										"produces": ["application/json"],
 										"responses":{
-											"«getStatusCode(c)»":{
+											"«getStatusCode(c.op)»":{
 												"description": "valid operation",
 												"schema": {
-													«IF c==Command.CREATE»
-													"$ref": "#/definitions/«r.entity.name»"
-													«ELSE»
-													"type": "array",
-													"items": {
+													«IF c.op==Operation.CREATE»
 														"$ref": "#/definitions/«r.entity.name»"
-													}
+													«ELSE»
+														"type": "array",
+														"items": {
+															"$ref": "#/definitions/«r.entity.name»"
+														}
 													«ENDIF»
 												}
 											},
@@ -81,40 +84,40 @@ class RestGenerator implements IGenerator {
 						},
 						"«r.path»/{id}": {
 							«FOR c : r.commands»
-								«IF c==Command.UPDATE || c==Command.READ || c==Command.DELETE»
-								"«getMethod(c)»": {
-									"tags":["«r.name»"],
-									«IF c==Command.UPDATE»
-									"consumes": ["application/json"],
-									"produces": ["application/json"],
-									«ELSEIF c==Command.READ»
-									"produces": ["application/json"],
-									«ENDIF»
-									"parameters":[
-										{
-											"name": "id",
-											"in": "path"
-										}«IF c==Command.UPDATE»,
-										{
-											"in": "body",
-											"name": "body",
-											"schema": {
-												"$ref": "#/definitions/«r.entity.name»"
+								«IF c.op==Operation.UPDATE || c.op==Operation.READ || c.op==Operation.DELETE»
+									"«getMethod(c.op)»": {
+										"tags":["«r.name»"],
+										«IF c.op==Operation.UPDATE»
+											"consumes": ["application/json"],
+											"produces": ["application/json"],
+										«ELSEIF c.op==Operation.READ»
+											"produces": ["application/json"],
+										«ENDIF»
+										"parameters":[
+											{
+												"name": "id",
+												"in": "path"
+											}«IF c.op==Operation.UPDATE»,
+																																		{
+																																			"in": "body",
+																																			"name": "body",
+																																			"schema": {
+																																				"$ref": "#/definitions/«r.entity.name»"
+																																			}
+											}«ENDIF»
+										],
+										"responses":{
+											"«getStatusCode(c.op)»":{
+												"description": "valid operation",
+												"schema": {
+													"$ref": "#/definitions/«r.entity.name»"
+												}
+											},
+											"400":{
+												"description": "invalid operation"
 											}
-										}«ENDIF»
-									],
-									"responses":{
-										"«getStatusCode(c)»":{
-											"description": "valid operation",
-											"schema": {
-												"$ref": "#/definitions/«r.entity.name»"
-											}
-										},
-										"400":{
-											"description": "invalid operation"
 										}
-									}
-								},
+									},
 								«ENDIF»
 							«ENDFOR»
 						},
@@ -122,24 +125,24 @@ class RestGenerator implements IGenerator {
 				},
 				"definitions":{
 					«FOR e : entities»
-					"«e.name»":{
-						"type": "object",
-						"properties":{
-							«FOR p:e.props»
-							"«p.name»":{
-								"type": "«p.type.getName.toLowerCase»"
-							},
-							«ENDFOR»
-							
-						}
-					},
+						"«e.name»":{
+							"type": "object",
+							"properties":{
+								«FOR p:e.props»
+									"«p.name»":{
+										"type": "«p.type.getName.toLowerCase»"
+									},
+								«ENDFOR»
+								
+							}
+						},
 					«ENDFOR»
 				}
 			}
 		'''
 	}
-	
-	def getStatusCode(Command command) {
+
+	def getStatusCode(Operation command) {
 		switch (command) {
 			case CREATE:
 				return "201"
@@ -152,7 +155,7 @@ class RestGenerator implements IGenerator {
 		}
 	}
 
-	def getMethod(Command command) {
+	def getMethod(Operation command) {
 		switch (command) {
 			case CREATE:
 				return "post"
@@ -172,9 +175,9 @@ class RestGenerator implements IGenerator {
 				id: Joi.number().integer(),
 				«FOR p : entity.props»
 					«IF p.entity==null»
-					«p.name»: Joi.«typeToJoi(p.type)»,
+						«p.name»: Joi.«typeToJoi(p.type)»,
 					«ELSE»
-					«p.name»: require('./«p.entity.name».js').schema,
+						«p.name»: require('./«p.entity.name».js').schema,
 					«ENDIF»
 				«ENDFOR»
 			});
@@ -204,7 +207,7 @@ class RestGenerator implements IGenerator {
 		}
 	}
 
-	def getRessource(Ressource r) {
+	def getRessource(Ressource r, List<User> users) {
 		'''
 			var express = require('express');
 			var validate = require('../validation/«r.entity.name»').val;
@@ -230,85 +233,92 @@ class RestGenerator implements IGenerator {
 				}
 				return index;
 			}
-			«IF r.commands.contains(Command.READ)»
-				router.get('/', function(req, res, next) {
-					console.log('list all '+name+'s');
-					cors(res);
-					res.json(dbarr);
-				});
-				router.get('/:id', function(req, res, next) {
-					var id = req.param('id');
-					console.log('getting '+name,id);
-					var index = getIndex(id);
-					cors(res);
-					if(index>=0){
-						console.log('success');
-						res.json(dbarr[index]);
-					}else{
-						var errText = 'Couldn\'t find '+name+' with id '+id;
-						console.log(errText);
-						res.status(400).send({ error: errText});
-					}
-				});
-			«ENDIF»
-			«IF r.commands.contains(Command.CREATE)»
-				router.post('/', function(req, res, next) {
-					var entity = req.body;
-					entity.id = Date.now();
-					console.log('create '+name,entity);
-					cors(res);
-					if(validate(entity)){
-						dbarr.push(entity);
-						console.log('success');
-						res.status(201).json(entity);
-					}else{
-						console.log('not valid');
-						res.status(400).json({ error: 'not a valid '+name,entity:entity});
-					}
-				});
-			«ENDIF»
-			«IF r.commands.contains(Command.UPDATE)»
-				router.put('/:id', function(req, res, next) {
-					var id = req.param('id');
-					var entity = req.body;
-					console.log('update '+name,id,'with',entity);
-					var index = getIndex(entity.id);
-					cors(res);
-					var errText = null;
-					if(!validate(entity)){
-						errText = 'not a valid '+name;
-					}else if(entity.id!=id){
-						errText = 'id of request ('+id+') didn\'t match payloadid ('+entity.id+')';
-					}else if(index<0){
-						errText = 'Couldn\'t find '+name+' with id '+id;
-					}
-					if(errText==null){
-						dbarr[index] = entity;
-						console.log('success');
-						res.json(entity);
-					}else{
-						console.log(errText);
-						res.status(400).send({ error: errText});
-					}
-				});
-			«ENDIF»
-			«IF r.commands.contains(Command.DELETE)»
-				router.delete('/:id', function(req, res, next) {
-					var id = req.param('id');
-					console.log('delete '+name,id);
-					var index = getIndex(id);
-					cors(res);
-					if(index>=0){
-						dbarr.splice(index,1);
-						console.log('success');
-						res.json(null);
-					}else{
-						var errText = 'Couldn\'t find '+name+' with id '+id;
-						console.log(errText);
-						res.status(400).send({ error: errText});
-					}
-				});
-			«ENDIF»
+			«FOR c : r.commands»
+				«IF c.op==Operation.READ»
+					router.get('/', function(req, res, next) {
+						console.log('list all '+name+'s');
+						cors(res);
+						«insertSecurity(c.user,users)»
+						res.json(dbarr);
+					});
+					router.get('/:id', function(req, res, next) {
+						var id = req.param('id');
+						console.log('getting '+name,id);
+						var index = getIndex(id);
+						cors(res);
+						«insertSecurity(c.user,users)»
+						if(index>=0){
+							console.log('success');
+							res.json(dbarr[index]);
+						}else{
+							var errText = 'Couldn\'t find '+name+' with id '+id;
+							console.log(errText);
+							res.status(400).send({ error: errText});
+						}
+					});
+				«ENDIF»
+				«IF c.op==Operation.CREATE»
+					router.post('/', function(req, res, next) {
+						var entity = req.body;
+						entity.id = Date.now();
+						console.log('create '+name,entity);
+						cors(res);
+						«insertSecurity(c.user,users)»
+						if(validate(entity)){
+							dbarr.push(entity);
+							console.log('success');
+							res.status(201).json(entity);
+						}else{
+							console.log('not valid');
+							res.status(400).json({ error: 'not a valid '+name,entity:entity});
+						}
+					});
+				«ENDIF»
+				«IF c.op==Operation.UPDATE»
+					router.put('/:id', function(req, res, next) {
+						var id = req.param('id');
+						var entity = req.body;
+						console.log('update '+name,id,'with',entity);
+						var index = getIndex(entity.id);
+						cors(res);
+						«insertSecurity(c.user,users)»
+						var errText = null;
+						if(!validate(entity)){
+							errText = 'not a valid '+name;
+						}else if(entity.id!=id){
+							errText = 'id of request ('+id+') didn\'t match payloadid ('+entity.id+')';
+						}else if(index<0){
+							errText = 'Couldn\'t find '+name+' with id '+id;
+						}
+						if(errText==null){
+							dbarr[index] = entity;
+							console.log('success');
+							res.json(entity);
+						}else{
+							console.log(errText);
+							res.status(400).send({ error: errText});
+						}
+					});
+				«ENDIF»
+				«IF c.op==Operation.DELETE»
+					router.delete('/:id', function(req, res, next) {
+						var id = req.param('id');
+						console.log('delete '+name,id);
+						var index = getIndex(id);
+						cors(res);
+						«insertSecurity(c.user,users)»
+						if(index>=0){
+							dbarr.splice(index,1);
+							console.log('success');
+							res.json(null);
+						}else{
+							var errText = 'Couldn\'t find '+name+' with id '+id;
+							console.log(errText);
+							res.status(400).send({ error: errText});
+						}
+					});
+				«ENDIF»
+			«ENDFOR»
 			router.options('/:id', function(req, res, next) {
 				cors(res);
 				res.json(null);
@@ -320,6 +330,38 @@ class RestGenerator implements IGenerator {
 			
 			module.exports = router;
 		'''
+	}
+
+	def insertSecurity(User user, List<User> users) {
+		if (user == null)
+			return ''
+		val allowedUsers = new ArrayList<User>();
+		allowedUsers.add(user);
+		var change = true;
+		while (change) {
+			change = false;
+			for (User u : users) {
+				if (allowedUsers.contains(u.parent) && !allowedUsers.contains(u)) {
+					allowedUsers.add(u);
+					change = true;
+				}
+			}
+		}
+		val allowedNames = new ArrayList<String>();
+		var String returnCode = "var user = req.headers['REMOTE_USER'];\nif("
+		var int index = 0;
+		for (User allowedUser : allowedUsers) {
+			allowedNames.add(allowedUser.name);
+			returnCode += "user!='" + allowedUser.name + "'";
+			if (index++ < allowedUsers.size - 1)
+				returnCode += "&&";
+		}
+		returnCode += '''){
+	console.log(user+' has no permission to do this action, only «allowedNames.toString()» have');
+	res.status(550).send({ error: 'You don\'t have permissions to access this ressource'});
+	return;
+}'''
+		return returnCode;
 	}
 
 	def getServer(List<Ressource> ress) {
