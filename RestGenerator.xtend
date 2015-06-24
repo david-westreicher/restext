@@ -15,6 +15,8 @@ import org.eclipse.xtext.generator.IGenerator
 import static extension org.eclipse.xtext.EcoreUtil2.*
 import at.westreicher.rest.rest.User
 import java.util.ArrayList
+import at.westreicher.rest.rest.Command
+import org.eclipse.emf.common.util.EList
 
 /**
  * Generates code from your model files on save.
@@ -24,11 +26,12 @@ import java.util.ArrayList
 class RestGenerator implements IGenerator {
 
 	override void doGenerate(Resource resource, IFileSystemAccess fsa) {
-		fsa.generateFile('package.json', getPackageJson(resource.normalizedURI.lastSegment.replace('.rest', '')))
+		val name = resource.normalizedURI.lastSegment.replace('.rest', '')
+		fsa.generateFile('package.json', getPackageJson(name))
 		val ressources = resource.allContents.filter(typeof(Ressource)).toList
 		val entities = resource.allContents.filter(typeof(Entity)).toList
 		val users = resource.allContents.filter(typeof(User)).toList
-		fsa.generateFile('swagger.json', getSwagger(ressources, entities))
+		fsa.generateFile('swagger.json', getSwagger(name, ressources, entities))
 		fsa.generateFile('server.js', getServer(ressources))
 		for (Ressource r : ressources)
 			fsa.generateFile('ressources/' + r.name + '.js', getRessource(r, users))
@@ -36,91 +39,129 @@ class RestGenerator implements IGenerator {
 			fsa.generateFile('validation/' + e.name + '.js', getValidation(e))
 	}
 
-	def getSwagger(List<Ressource> ressources, List<Entity> entities) {
+	def getSwagger(String name, List<Ressource> ressources, List<Entity> entities) {
 		'''
 			{
 				"swagger":"2.0",
 				"basePath":"/",
 				"schemes": ["http"],
+				"host": "localhost:8080",
+				"info": {
+					"title":"«name»",
+					"description":"An automagically generated swagger.io file",
+					"version":"1.0.0"
+				},
+				"securityDefinitions":{
+					"remoteuser":{
+						"type":"apiKey",
+						"name":"REMOTE_USER",
+						"in":"header"
+					}
+				},
 				"paths":{
 					«FOR r : ressources»
 						"«r.path»": {
-							«FOR c : r.commands»
-								«IF c.op==Operation.CREATE || c.op==Operation.READ»
-									"«getMethod(c.op)»": {
-										"tags":["«r.name»"],
+							«val globCmds = getGlobCommands(r.commands)»
+							«FOR c : globCmds»
+								"«getMethod(c.op)»": {
+									"tags":["«r.name»"],
+									«IF c.op==Operation.CREATE»
+										"consumes": ["application/json"],
+									«ENDIF»
+									"parameters":[
 										«IF c.op==Operation.CREATE»
-											"consumes": ["application/json"],
-											"parameters":[{
+											{
 												"in": "body",
 												"name": "body",
 												"schema": {
 													"$ref": "#/definitions/«r.entity.name»"
 												}
-											}],
-										«ENDIF»
-										"produces": ["application/json"],
-										"responses":{
-											"«getStatusCode(c.op)»":{
-												"description": "valid operation",
-												"schema": {
-													«IF c.op==Operation.CREATE»
-														"$ref": "#/definitions/«r.entity.name»"
-													«ELSE»
-														"type": "array",
-														"items": {
-															"$ref": "#/definitions/«r.entity.name»"
-														}
-													«ENDIF»
-												}
-											},
-											"400":{
-												"description": "invalid operation"
 											}
+										«ENDIF»
+										«IF c.user!=null»
+											«IF c.op==Operation.CREATE»,«ENDIF»
+											{
+												"name": "REMOTE_USER",
+												"in": "header",
+												"required": true,
+												"type": "string"
+											}
+										«ENDIF»
+									],
+									"produces": ["application/json"],
+									"responses":{
+										"«getStatusCode(c.op)»":{
+											"description": "valid operation",
+											"schema": {
+												«IF c.op==Operation.CREATE»
+													"$ref": "#/definitions/«r.entity.name»"
+												«ELSE»
+													"type": "array",
+													"items": {
+														"$ref": "#/definitions/«r.entity.name»"
+													}
+												«ENDIF»
+											}
+										},
+										"400":{
+											"description": "invalid operation"
 										}
-									},
-								«ENDIF»
+									}
+									«addSecurity(c)»
+								}«IF c!=globCmds.get(globCmds.size-1)»,«ENDIF»
 							«ENDFOR»
 						},
 						"«r.path»/{id}": {
-							«FOR c : r.commands»
-								«IF c.op==Operation.UPDATE || c.op==Operation.READ || c.op==Operation.DELETE»
-									"«getMethod(c.op)»": {
-										"tags":["«r.name»"],
+							«val idCmds = getIDCommands(r.commands)»
+							«FOR c : idCmds»
+								"«getMethod(c.op)»": {
+									"tags":["«r.name»"],
+									«IF c.op==Operation.UPDATE»
+										"consumes": ["application/json"],
+										"produces": ["application/json"],
+									«ELSEIF c.op==Operation.READ»
+										"produces": ["application/json"],
+									«ENDIF»
+									"parameters":[
+										{
+											"name": "id",
+											"in": "path",
+											"type": "integer",
+											"required": true
+										}
 										«IF c.op==Operation.UPDATE»
-											"consumes": ["application/json"],
-											"produces": ["application/json"],
-										«ELSEIF c.op==Operation.READ»
-											"produces": ["application/json"],
-										«ENDIF»
-										"parameters":[
-											{
-												"name": "id",
-												"in": "path"
-											}«IF c.op==Operation.UPDATE»,
-																																		{
-																																			"in": "body",
-																																			"name": "body",
-																																			"schema": {
-																																				"$ref": "#/definitions/«r.entity.name»"
-																																			}
-											}«ENDIF»
-										],
-										"responses":{
-											"«getStatusCode(c.op)»":{
-												"description": "valid operation",
+											,{
+												"name": "body",
+												"in": "body",
 												"schema": {
 													"$ref": "#/definitions/«r.entity.name»"
 												}
-											},
-											"400":{
-												"description": "invalid operation"
 											}
+										«ENDIF»
+										«IF c.user!=null»
+											,{
+												"name": "REMOTE_USER",
+												"in": "header",
+												"required": true,
+												"type": "string"
+											}
+										«ENDIF»
+									],
+									"responses":{
+										"«getStatusCode(c.op)»":{
+											"description": "valid operation",
+											"schema": {
+												"$ref": "#/definitions/«r.entity.name»"
+											}
+										},
+										"400":{
+											"description": "invalid operation"
 										}
-									},
-								«ENDIF»
+									}
+									«addSecurity(c)»
+								}«IF c!=idCmds.get(idCmds.size-1)»,«ENDIF»
 							«ENDFOR»
-						},
+						}«IF r!=ressources.get(ressources.size-1)»,«ENDIF»
 					«ENDFOR»
 				},
 				"definitions":{
@@ -131,15 +172,40 @@ class RestGenerator implements IGenerator {
 								«FOR p:e.props»
 									"«p.name»":{
 										"type": "«p.type.getName.toLowerCase»"
-									},
+									}«IF p!=e.props.get(e.props.size-1)»,«ENDIF»
 								«ENDFOR»
 								
 							}
-						},
+						}«IF e!=entities.get(entities.size-1)»,«ENDIF»
 					«ENDFOR»
 				}
 			}
 		'''
+	}
+
+	def addSecurity(Command command) {
+		if (command.user == null)
+			return ''
+		return ''',"security": [{
+	"remoteuser":[]
+}]
+		'''
+	}
+
+	def getGlobCommands(EList<Command> list) {
+		var ops = new ArrayList<Command>();
+		for (Command c : list)
+			if (c.op == Operation.CREATE || c.op == Operation.READ)
+				ops.add(c);
+		return ops;
+	}
+
+	def getIDCommands(EList<Command> list) {
+		var ops = new ArrayList<Command>();
+		for (Command c : list)
+			if (c.op == Operation.UPDATE || c.op == Operation.READ || c.op == Operation.DELETE)
+				ops.add(c);
+		return ops;
 	}
 
 	def getStatusCode(Operation command) {
@@ -172,7 +238,7 @@ class RestGenerator implements IGenerator {
 		'''
 			var Joi = require('joi');
 			var schema = Joi.object().keys({
-				id: Joi.number().integer(),
+				id:	Joi.number().integer(),
 				«FOR p : entity.props»
 					«IF p.entity==null»
 						«p.name»: Joi.«typeToJoi(p.type)»,
@@ -182,6 +248,7 @@ class RestGenerator implements IGenerator {
 				«ENDFOR»
 			});
 			function validate(obj){
+				console.log(obj);
 				var result = Joi.validate(obj,schema);
 				if(result.error===null){
 					console.log('valid');
@@ -212,10 +279,11 @@ class RestGenerator implements IGenerator {
 			var express = require('express');
 			var validate = require('../validation/«r.entity.name»').val;
 			
-			function cors(res){
-				res.setHeader('Access-Control-Allow-Origin', 'http://localhost:8000');
+			function cors(req,res){
+				var origin = req.headers.origin;
+				res.setHeader('Access-Control-Allow-Origin', origin);
 				res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, PATCH, DELETE, CLICK');
-				res.setHeader('Access-Control-Allow-Headers', 'X-HTTP-Method-Override,X-Requested-With,content-type');
+				res.setHeader('Access-Control-Allow-Headers', 'X-HTTP-Method-Override,X-Requested-With,content-type,REMOTE_USER');
 				res.setHeader('Access-Control-Allow-Credentials', true);
 			}
 			
@@ -237,7 +305,7 @@ class RestGenerator implements IGenerator {
 				«IF c.op==Operation.READ»
 					router.get('/', function(req, res, next) {
 						console.log('list all '+name+'s');
-						cors(res);
+						cors(req,res);
 						«insertSecurity(c.user,users)»
 						res.json(dbarr);
 					});
@@ -245,7 +313,7 @@ class RestGenerator implements IGenerator {
 						var id = req.param('id');
 						console.log('getting '+name,id);
 						var index = getIndex(id);
-						cors(res);
+						cors(req,res);
 						«insertSecurity(c.user,users)»
 						if(index>=0){
 							console.log('success');
@@ -262,7 +330,7 @@ class RestGenerator implements IGenerator {
 						var entity = req.body;
 						entity.id = Date.now();
 						console.log('create '+name,entity);
-						cors(res);
+						cors(req,res);
 						«insertSecurity(c.user,users)»
 						if(validate(entity)){
 							dbarr.push(entity);
@@ -279,14 +347,13 @@ class RestGenerator implements IGenerator {
 						var id = req.param('id');
 						var entity = req.body;
 						console.log('update '+name,id,'with',entity);
+						entity.id = id;
 						var index = getIndex(entity.id);
-						cors(res);
+						cors(req,res);
 						«insertSecurity(c.user,users)»
 						var errText = null;
 						if(!validate(entity)){
 							errText = 'not a valid '+name;
-						}else if(entity.id!=id){
-							errText = 'id of request ('+id+') didn\'t match payloadid ('+entity.id+')';
 						}else if(index<0){
 							errText = 'Couldn\'t find '+name+' with id '+id;
 						}
@@ -305,12 +372,12 @@ class RestGenerator implements IGenerator {
 						var id = req.param('id');
 						console.log('delete '+name,id);
 						var index = getIndex(id);
-						cors(res);
+						cors(req,res);
 						«insertSecurity(c.user,users)»
 						if(index>=0){
-							dbarr.splice(index,1);
+							var deleted = dbarr.splice(index,1);
 							console.log('success');
-							res.json(null);
+							res.json(deleted);
 						}else{
 							var errText = 'Couldn\'t find '+name+' with id '+id;
 							console.log(errText);
@@ -320,11 +387,11 @@ class RestGenerator implements IGenerator {
 				«ENDIF»
 			«ENDFOR»
 			router.options('/:id', function(req, res, next) {
-				cors(res);
+				cors(req,res);
 				res.json(null);
 			});
 			router.options('/', function(req, res, next) {
-				cors(res);
+				cors(req,res);
 				res.json(null);
 			});
 			
@@ -348,7 +415,7 @@ class RestGenerator implements IGenerator {
 			}
 		}
 		val allowedNames = new ArrayList<String>();
-		var String returnCode = "var user = req.headers['REMOTE_USER'];\nif("
+		var String returnCode = "var user = req.headers['remote_user'];\nif("
 		var int index = 0;
 		for (User allowedUser : allowedUsers) {
 			allowedNames.add(allowedUser.name);
