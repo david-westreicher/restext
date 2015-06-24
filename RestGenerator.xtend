@@ -119,6 +119,21 @@ class RestGenerator implements IGenerator {
 							«ENDFOR»
 						},
 					«ENDFOR»
+				},
+				"definitions":{
+					«FOR e : entities»
+					"«e.name»":{
+						"type": "object",
+						"properties":{
+							«FOR p:e.props»
+							"«p.name»":{
+								"type": "«p.type.getName.toLowerCase»"
+							},
+							«ENDFOR»
+							
+						}
+					},
+					«ENDFOR»
 				}
 			}
 		'''
