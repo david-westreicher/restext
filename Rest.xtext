@@ -1,7 +1,6 @@
-grammar at.westreicher.rest.Rest with org.eclipse.xtext.common.Terminals
+grammar at.westreicher.rest.Rest with org.eclipse.xtext.common.Terminals 
 
 generate rest "http://www.westreicher.at/rest/Rest"
-
 Model:
 	ressources+=Object*;
 
@@ -20,7 +19,7 @@ Entity:
 	props+=Property*;
 
 Property:
-	name=ID ':' (type=Type | ('entity:' entity=[Entity])) (NEWLINETAB?);
+	name=ID ':' (type=Type | ('entity: ' entity=[Entity])) (NEWLINETAB?);
 
 enum Type:
 	STRING='string' | BOOLEAN='boolean' | INTEGER='integer';

@@ -38,7 +38,11 @@ class RestGenerator implements IGenerator {
 			var schema = Joi.object().keys({
 				id: Joi.number().integer(),
 				«FOR p : entity.props»
+					«IF p.entity==null»
 					«p.name»: Joi.«typeToJoi(p.type)»,
+					«ELSE»
+					«p.name»: require('./«p.entity.name».js').schema,
+					«ENDIF»
 				«ENDFOR»
 			});
 			function validate(obj){
@@ -52,7 +56,7 @@ class RestGenerator implements IGenerator {
 					return false;
 				}
 			}
-			module.exports = validate;
+			module.exports = {val:validate,schema:schema};
 		'''
 	}
 
@@ -70,7 +74,7 @@ class RestGenerator implements IGenerator {
 	def getRessource(Ressource r) {
 		'''
 			var express = require('express');
-			var validate = require('../validation/«r.entity.name»');
+			var validate = require('../validation/«r.entity.name»').val;
 			
 			function cors(res){
 			    res.setHeader('Access-Control-Allow-Origin', 'http://localhost:8000');
