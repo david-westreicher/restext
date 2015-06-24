@@ -1,0 +1,18 @@
+telnet 127.0.0.1 8080
+
+POST http://localhost:8080/todos HTTP/1.1
+Accept: */*
+Accept-Encoding: gzip,deflate,sdch
+Accept-Language: en-US,en;q=0.8,fa;q=0.6,sv;q=0.4
+Cache-Control: no-cache
+Connection: keep-alive
+Content-Length: 34
+Content-Type: application/json
+Host: localhost
+Origin: http://editor.swagger.io
+REMOTE_USER: admin
+Referer: http://editor.swagger.io/
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/43.0.2357.65 Safari/537.36
+
+{"title": "asd","order": "asd"}
+
