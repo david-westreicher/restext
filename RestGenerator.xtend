@@ -25,11 +25,144 @@ class RestGenerator implements IGenerator {
 		fsa.generateFile('package.json', getPackageJson(resource.normalizedURI.lastSegment.replace('.rest', '')))
 		val ressources = resource.allContents.filter(typeof(Ressource)).toList
 		val entities = resource.allContents.filter(typeof(Entity)).toList
+		fsa.generateFile('swagger.json', getSwagger(ressources, entities))
 		fsa.generateFile('server.js', getServer(ressources))
 		for (Ressource r : ressources)
 			fsa.generateFile('ressources/' + r.name + '.js', getRessource(r))
 		for (Entity e : entities)
 			fsa.generateFile('validation/' + e.name + '.js', getValidation(e))
+	}
+
+	def getSwagger(List<Ressource> ressources, List<Entity> entities) {
+		'''
+			{
+				"swagger":"2.0",
+				"basePath":"/",
+				"schemes": ["http"],
+				"paths":{
+					«FOR r : ressources»
+						"«r.path»": {
+							«FOR c : r.commands»
+								«IF c==Command.CREATE || c==Command.READ»
+									"«getMethod(c)»": {
+										"tags":["«r.name»"],
+										«IF c==Command.CREATE»
+										"consumes": ["application/json"],
+										"parameters":[{
+											"in": "body",
+											"name": "body",
+											"schema": {
+												"$ref": "#/definitions/«r.entity.name»"
+											}
+										}],
+										«ENDIF»
+										"produces": ["application/json"],
+										"responses":{
+											"«getStatusCode(c)»":{
+												"description": "valid operation",
+												"schema": {
+													«IF c==Command.CREATE»
+													"$ref": "#/definitions/«r.entity.name»"
+													«ELSE»
+													"type": "array",
+													"items": {
+														"$ref": "#/definitions/«r.entity.name»"
+													}
+													«ENDIF»
+												}
+											},
+											"400":{
+												"description": "invalid operation"
+											}
+										}
+									},
+								«ENDIF»
+							«ENDFOR»
+						},
+						"«r.path»/{id}": {
+							«FOR c : r.commands»
+								«IF c==Command.UPDATE || c==Command.READ || c==Command.DELETE»
+								"«getMethod(c)»": {
+									"tags":["«r.name»"],
+									«IF c==Command.UPDATE»
+									"consumes": ["application/json"],
+									"produces": ["application/json"],
+									«ELSEIF c==Command.READ»
+									"produces": ["application/json"],
+									«ENDIF»
+									"parameters":[
+										{
+											"name": "id",
+											"in": "path"
+										}«IF c==Command.UPDATE»,
+										{
+											"in": "body",
+											"name": "body",
+											"schema": {
+												"$ref": "#/definitions/«r.entity.name»"
+											}
+										}«ENDIF»
+									],
+									"responses":{
+										"«getStatusCode(c)»":{
+											"description": "valid operation",
+											"schema": {
+												"$ref": "#/definitions/«r.entity.name»"
+											}
+										},
+										"400":{
+											"description": "invalid operation"
+										}
+									}
+								},
+								«ENDIF»
+							«ENDFOR»
+						},
+					«ENDFOR»
+				},
+				"definitions":{
+					«FOR e : entities»
+					"«e.name»":{
+						"type": "object",
+						"properties":{
+							«FOR p:e.props»
+							"«p.name»":{
+								"type": "«p.type.getName.toLowerCase»"
+							},
+							«ENDFOR»
+							
+						}
+					},
+					«ENDFOR»
+				}
+			}
+		'''
+	}
+	
+	def getStatusCode(Command command) {
+		switch (command) {
+			case CREATE:
+				return "201"
+			case READ:
+				return "200"
+			case UPDATE:
+				return "200"
+			case DELETE:
+				return "200"
+		}
+	}
+
+	def getMethod(Command command) {
+		switch (command) {
+			case CREATE:
+				return "post"
+			case READ:
+				return "get"
+			case UPDATE:
+				return "put"
+			case DELETE:
+				return "delete"
+		}
 	}
 
 	def getValidation(Entity entity) {
@@ -77,10 +210,10 @@ class RestGenerator implements IGenerator {
 			var validate = require('../validation/«r.entity.name»').val;
 			
 			function cors(res){
-			    res.setHeader('Access-Control-Allow-Origin', 'http://localhost:8000');
-			    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, PATCH, DELETE, CLICK');
-			    res.setHeader('Access-Control-Allow-Headers', 'X-HTTP-Method-Override,X-Requested-With,content-type');
-			    res.setHeader('Access-Control-Allow-Credentials', true);
+				res.setHeader('Access-Control-Allow-Origin', 'http://localhost:8000');
+				res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, PATCH, DELETE, CLICK');
+				res.setHeader('Access-Control-Allow-Headers', 'X-HTTP-Method-Override,X-Requested-With,content-type');
+				res.setHeader('Access-Control-Allow-Credentials', true);
 			}
 			
 			var router = express.Router();
@@ -88,58 +221,58 @@ class RestGenerator implements IGenerator {
 			var name = '«r.entity.name»';
 			
 			function getIndex(id){
-			    var index = -1;
-			    for(var i=0;i<dbarr.length;i++){
-			        if(dbarr[i].id == id){
-			            index = i;
-			            break;
-			        }
-			    }
-			    return index;
+				var index = -1;
+				for(var i=0;i<dbarr.length;i++){
+					if(dbarr[i].id == id){
+						index = i;
+						break;
+					}
+				}
+				return index;
 			}
 			«IF r.commands.contains(Command.READ)»
 				router.get('/', function(req, res, next) {
-				    console.log('list all '+name+'s');
-				    cors(res);
-				    res.json(dbarr);
+					console.log('list all '+name+'s');
+					cors(res);
+					res.json(dbarr);
 				});
 				router.get('/:id', function(req, res, next) {
 					var id = req.param('id');
-					   console.log('getting '+name,id);
-					   var index = getIndex(id);
-					   cors(res);
-					   if(index>=0){
-					   	console.log('success');
-					   	   res.json(dbarr[index]);
-					   }else{
-					   	var errText = 'Couldn\'t find '+name+' with id '+id;
-					   	console.log(errText);
-					   	res.status(400).send({ error: errText});
-					   }
+					console.log('getting '+name,id);
+					var index = getIndex(id);
+					cors(res);
+					if(index>=0){
+						console.log('success');
+						res.json(dbarr[index]);
+					}else{
+						var errText = 'Couldn\'t find '+name+' with id '+id;
+						console.log(errText);
+						res.status(400).send({ error: errText});
+					}
 				});
 			«ENDIF»
 			«IF r.commands.contains(Command.CREATE)»
 				router.post('/', function(req, res, next) {
-				    var entity = req.body;
-				    entity.id = Date.now();
-				    console.log('create '+name,entity);
-				    cors(res);
-				    if(validate(entity)){
-				     dbarr.push(entity);
-				     console.log('success');
-				     res.status(201).json(entity);
-				}else{
-				    console.log('not valid');
-				    res.status(400).json({ error: 'not a valid '+name,entity:entity});
-				}
+					var entity = req.body;
+					entity.id = Date.now();
+					console.log('create '+name,entity);
+					cors(res);
+					if(validate(entity)){
+						dbarr.push(entity);
+						console.log('success');
+						res.status(201).json(entity);
+					}else{
+						console.log('not valid');
+						res.status(400).json({ error: 'not a valid '+name,entity:entity});
+					}
 				});
 			«ENDIF»
 			«IF r.commands.contains(Command.UPDATE)»
 				router.put('/:id', function(req, res, next) {
 					var id = req.param('id');
-					   var entity = req.body;
-					   console.log('update '+name,id,'with',entity);
-					   var index = getIndex(entity.id);
+					var entity = req.body;
+					console.log('update '+name,id,'with',entity);
+					var index = getIndex(entity.id);
 					cors(res);
 					var errText = null;
 					if(!validate(entity)){
@@ -148,41 +281,41 @@ class RestGenerator implements IGenerator {
 						errText = 'id of request ('+id+') didn\'t match payloadid ('+entity.id+')';
 					}else if(index<0){
 						errText = 'Couldn\'t find '+name+' with id '+id;
-						  }
-						  if(errText==null){
-						   dbarr[index] = entity;
-						   console.log('success');
-						   res.json(entity);
-						  }else{
-						  	console.log(errText);
-						  	res.status(400).send({ error: errText});
-						  }
+					}
+					if(errText==null){
+						dbarr[index] = entity;
+						console.log('success');
+						res.json(entity);
+					}else{
+						console.log(errText);
+						res.status(400).send({ error: errText});
+					}
 				});
 			«ENDIF»
 			«IF r.commands.contains(Command.DELETE)»
 				router.delete('/:id', function(req, res, next) {
 					var id = req.param('id');
-					   console.log('delete '+name,id);
-					   var index = getIndex(id);
-					   cors(res);
-					   if(index>=0){
-					       dbarr.splice(index,1);
-					   	console.log('success');
-					   	   res.json(null);
-					   }else{
-					   	var errText = 'Couldn\'t find '+name+' with id '+id;
-					   	console.log(errText);
-					   	res.status(400).send({ error: errText});
-					   }
+					console.log('delete '+name,id);
+					var index = getIndex(id);
+					cors(res);
+					if(index>=0){
+						dbarr.splice(index,1);
+						console.log('success');
+						res.json(null);
+					}else{
+						var errText = 'Couldn\'t find '+name+' with id '+id;
+						console.log(errText);
+						res.status(400).send({ error: errText});
+					}
 				});
 			«ENDIF»
 			router.options('/:id', function(req, res, next) {
-			    cors(res);
-			    res.json(null);
+				cors(res);
+				res.json(null);
 			});
 			router.options('/', function(req, res, next) {
-			    cors(res);
-			    res.json(null);
+				cors(res);
+				res.json(null);
 			});
 			
 			module.exports = router;
@@ -215,10 +348,10 @@ class RestGenerator implements IGenerator {
 			  "version": "0.0.0",
 			  "private": true,
 			  "dependencies": {
-			    "body-parser": "~1.8.1",
-			    "joi": "~6.4.2",
-			    "express": "~4.9.0"
-			  }
+				"body-parser": "~1.8.1",
+				"joi": "~6.4.2",
+				"express": "~4.9.0"
+				 }
 			}
 		'''
 	}
